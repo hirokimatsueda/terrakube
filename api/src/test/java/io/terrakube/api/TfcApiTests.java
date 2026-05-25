@@ -388,6 +388,46 @@ class TfcApiTests extends ServerApplicationTests {
     }
 
     @Test
+    void getWorkspaceTagBindings() {
+        // simple_tag1 has two key-only tags (development, networking) seeded with no value
+        given()
+                .headers("Authorization", "Bearer " + generatePAT("TERRAKUBE_DEVELOPERS"))
+                .when()
+                .get("/remote/tfe/v2/workspaces/c20633b2-82cc-4105-9806-16e23ad0e1df/tag-bindings")
+                .then()
+                .assertThat()
+                .body("data.size()", IsEqual.equalTo(2))
+                .body("data[0].type", IsEqual.equalTo("tag-bindings"))
+                .body("data[0].attributes.key", org.hamcrest.Matchers.notNullValue())
+                .body("data[0].attributes.value", IsEqual.equalTo(""))
+                .log()
+                .all()
+                .statusCode(HttpStatus.OK.value());
+
+        // Set a value on one workspace tag and verify it is reflected
+        io.terrakube.api.rs.workspace.tag.WorkspaceTag wt =
+                workspaceTagRepository.findById(UUID.fromString("e982f999-f68f-4635-a44a-e8b32c122ae8")).get();
+        wt.setValue("dev-value");
+        workspaceTagRepository.save(wt);
+
+        given()
+                .headers("Authorization", "Bearer " + generatePAT("TERRAKUBE_DEVELOPERS"))
+                .when()
+                .get("/remote/tfe/v2/workspaces/c20633b2-82cc-4105-9806-16e23ad0e1df/tag-bindings")
+                .then()
+                .assertThat()
+                .body("data.size()", IsEqual.equalTo(2))
+                .body("data.find { it.attributes.key == 'development' }.attributes.value", IsEqual.equalTo("dev-value"))
+                .log()
+                .all()
+                .statusCode(HttpStatus.OK.value());
+
+        // Restore
+        wt.setValue(null);
+        workspaceTagRepository.save(wt);
+    }
+
+    @Test
     void createWorkspaceState() {
         //create first workspace state, internally it will create a job
         given()

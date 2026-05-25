@@ -1,5 +1,10 @@
 import { JobStatus } from "../../domain/types";
 
+export type WorkspaceTagEntry = {
+  tagId: string;
+  value?: string;
+};
+
 export type WorkspaceListItem = {
   id: string;
   lastRun?: string;
@@ -11,7 +16,7 @@ export type WorkspaceListItem = {
   source: string;
   normalizedSource?: string;
   terraformVersion?: string;
-  tags?: string[];
+  tags?: WorkspaceTagEntry[];
   projectId?: string;
   projectName?: string;
 };

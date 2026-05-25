@@ -17,6 +17,7 @@ import io.terrakube.api.plugin.state.model.workspace.WorkspaceData;
 import io.terrakube.api.plugin.state.model.workspace.WorkspaceError;
 import io.terrakube.api.plugin.state.model.workspace.WorkspaceList;
 import io.terrakube.api.plugin.state.model.workspace.state.consumers.StateConsumerList;
+import io.terrakube.api.plugin.state.model.workspace.tags.TagBindingList;
 import io.terrakube.api.plugin.state.model.workspace.tags.TagDataList;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
@@ -129,6 +130,15 @@ public class RemoteTfeController {
         log.info("Searching Names: {} {}", organizationName, searchName.isPresent() ? searchName.get() : null);
         return ResponseEntity.of(Optional.ofNullable(remoteTfeService.listWorkspace(organizationName, searchTags,
                 searchName, (JwtAuthenticationToken) principal)));
+    }
+
+    @Transactional
+    @GetMapping(produces = "application/vnd.api+json", path = "/workspaces/{workspaceId}/tag-bindings")
+    public ResponseEntity<TagBindingList> getWorkspaceTagBindings(@PathVariable("workspaceId") String workspaceId,
+            Principal principal) {
+        log.info("Get tag bindings for workspace {}", workspaceId);
+        return ResponseEntity.of(Optional.ofNullable(
+                remoteTfeService.getWorkspaceTagBindings(workspaceId, (JwtAuthenticationToken) principal)));
     }
 
     @Transactional

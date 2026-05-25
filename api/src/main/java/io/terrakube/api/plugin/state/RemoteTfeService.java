@@ -33,6 +33,8 @@ import io.terrakube.api.plugin.state.model.workspace.WorkspaceModel;
 import io.terrakube.api.plugin.state.model.workspace.state.consumers.LinksStateConsumer;
 import io.terrakube.api.plugin.state.model.workspace.state.consumers.RemoteStateConsumer;
 import io.terrakube.api.plugin.state.model.workspace.state.consumers.StateConsumerList;
+import io.terrakube.api.plugin.state.model.workspace.tags.TagBindingList;
+import io.terrakube.api.plugin.state.model.workspace.tags.TagBindingModel;
 import io.terrakube.api.plugin.state.model.workspace.tags.TagDataList;
 import io.terrakube.api.plugin.state.model.workspace.vcs.VcsRepo;
 import io.terrakube.api.plugin.security.rbac.RbacService;
@@ -586,14 +588,22 @@ public class RemoteTfeService {
             log.info("Searching workspaces with tags: {}", searchTags);
             for (Workspace workspace : organizationRepository.getOrganizationByName(organizationName).getWorkspace()) {
                 List<WorkspaceTag> workspaceTagList = workspace.getWorkspaceTag();
-                int matchingTags = 0;
+                Set<String> matchedSearchTags = new HashSet<>();
 
                 for (WorkspaceTag workspaceTag : workspaceTagList) {
                     Tag tag = tagRepository.getReferenceById(UUID.fromString(workspaceTag.getTagId()));
-                    if (listTags.indexOf(tag.getName()) > -1) {
-                        matchingTags++;
+                    for (String searchTag : listTags) {
+                        if (matchedSearchTags.contains(searchTag)) continue;
+                        String[] parts = searchTag.split(":", 2);
+                        String searchKey = parts[0];
+                        String searchValue = parts.length > 1 ? parts[1] : null;
+                        if (tag.getName().equals(searchKey) &&
+                                (searchValue == null || searchValue.equals(workspaceTag.getValue()))) {
+                            matchedSearchTags.add(searchTag);
+                        }
                     }
                 }
+                int matchingTags = matchedSearchTags.size();
                 log.info("Workspace {} Tags Count {} Searching Tag Quantity {} Matched {}", workspace.getName(),
                         workspaceTagList.size(), listTags.size(), matchingTags);
                 if (matchingTags == listTags.size()) {
@@ -629,23 +639,59 @@ public class RemoteTfeService {
         }
 
         tagDataList.getData().forEach(tagModel -> {
-            Tag tag = searchOrCreateTagOrganization(workspace, tagModel.getAttributes().get("name"));
-            log.info("Updating tag {} in Workspace {}", tagModel.getAttributes().get("name"), workspace.getName());
-            if (workspaceTagRepository.getByWorkspaceAndTagId(workspace, tag.getId().toString()) == null) {
+            String tagNameOrKV = tagModel.getAttributes().get("name");
+            String[] parts = tagNameOrKV.split(":", 2);
+            String tagKey = parts[0];
+            String tagValue = parts.length > 1 ? parts[1] : null;
+            Tag tag = searchOrCreateTagOrganization(workspace, tagKey);
+            log.info("Updating tag {} (value: {}) in Workspace {}", tagKey, tagValue, workspace.getName());
+            WorkspaceTag existing = workspaceTagRepository.getByWorkspaceAndTagId(workspace, tag.getId().toString());
+            if (existing == null) {
                 log.info("Tag {} does not exist in workspace {}, adding new tag to workspace...",
-                        tagModel.getAttributes().get("name"), workspace.getName());
+                        tagKey, workspace.getName());
                 WorkspaceTag newWorkspaceTag = new WorkspaceTag();
-                //newWorkspaceTag.setId(UUID.randomUUID());
                 newWorkspaceTag.setTagId(tag.getId().toString());
                 newWorkspaceTag.setWorkspace(workspace);
+                newWorkspaceTag.setValue(tagValue);
                 workspaceTagRepository.save(newWorkspaceTag);
+            } else if (tagValue != null && !tagValue.equals(existing.getValue())) {
+                log.info("Tag {} exists in workspace {}, updating value to {}", tagKey, workspace.getName(), tagValue);
+                existing.setValue(tagValue);
+                workspaceTagRepository.save(existing);
             } else {
-                log.info("Tag {} exist in workspace {}, there is no need to update",
-                        tagModel.getAttributes().get("name"), workspace.getName());
+                log.info("Tag {} exists in workspace {}, no update needed", tagKey, workspace.getName());
             }
         });
 
         return true;
+    }
+
+    TagBindingList getWorkspaceTagBindings(String workspaceId, JwtAuthenticationToken currentUser) {
+        Workspace workspace = workspaceRepository.getReferenceById(UUID.fromString(workspaceId));
+
+        if (!validateUserIsMemberOrg(workspace.getOrganization(), currentUser)
+                && !validateUserLimitedWorkspaceAccess(workspace.getOrganization(), currentUser)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "User does not have access to this workspace");
+        }
+
+        List<WorkspaceTag> workspaceTags = workspaceTagRepository.findByWorkspace(workspace);
+        List<TagBindingModel> bindings = new ArrayList<>();
+        for (WorkspaceTag wt : workspaceTags) {
+            tagRepository.findById(UUID.fromString(wt.getTagId())).ifPresent(tag -> {
+                TagBindingModel binding = new TagBindingModel();
+                binding.setType("tag-bindings");
+                binding.setId(wt.getId().toString());
+                Map<String, Object> attrs = new HashMap<>();
+                attrs.put("key", tag.getName());
+                attrs.put("value", wt.getValue() != null ? wt.getValue() : "");
+                binding.setAttributes(attrs);
+                bindings.add(binding);
+            });
+        }
+        TagBindingList result = new TagBindingList();
+        result.setData(bindings);
+        return result;
     }
 
     synchronized Tag searchOrCreateTagOrganization(Workspace workspace, String tagName) {

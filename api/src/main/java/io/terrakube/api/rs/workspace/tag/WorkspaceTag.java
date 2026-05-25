@@ -27,6 +27,9 @@ public class WorkspaceTag extends GenericAuditFields {
     @Column(name = "tag_id")
     private String tagId;
 
+    @Column(name = "value")
+    private String value;
+
     @ManyToOne
     @JoinColumn(name = "workspace_id")
     private Workspace workspace;

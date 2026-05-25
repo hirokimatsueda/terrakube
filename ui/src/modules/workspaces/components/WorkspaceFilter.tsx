@@ -46,7 +46,13 @@ export default function WorkspaceFilter({
 }: Props) {
   const [statusFilter, setStatusFilter] = useState<string>(sessionStorage.getItem("filterValue") || "All");
   const [searchFilter, setSearchFilter] = useState(sessionStorage.getItem("searchValue") || "");
-  const [tagsFilter, setTagsFilter] = useState<string[]>((sessionStorage.getItem("selectedTags") as any) || []);
+  const [tagsFilter, setTagsFilter] = useState<{ key: string; value: string }[]>(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem("selectedTags") || "[]");
+    } catch {
+      return [];
+    }
+  });
   const [projectFilter, setProjectFilter] = useState<string | null>(sessionStorage.getItem("projectFilter") || null);
   const [tags, setTags] = useState<TagModel[]>([]);
 
@@ -83,11 +89,14 @@ export default function WorkspaceFilter({
     });
 
     filteredWorkspaces = filteredWorkspaces.filter((workspace) => {
-      if (tagsFilter && tagsFilter.length > 0) {
-        return workspace.tags?.some((tag) => tagsFilter.includes(tag));
-      } else {
-        return true;
+      if (tagsFilter.length > 0) {
+        return tagsFilter.some((filterRow) =>
+          workspace.tags?.some(
+            (tag) => tag.tagId === filterRow.key && (filterRow.value === "" || tag.value === filterRow.value)
+          )
+        );
       }
+      return true;
     });
 
     filteredWorkspaces = filteredWorkspaces.filter((workspace) => {
@@ -112,7 +121,7 @@ export default function WorkspaceFilter({
   const handleOpenChange = (newOpen: boolean) => {
     if (newOpen) {
       if (tagsFilter.length > 0) {
-        setTempTagRows(tagsFilter.map((tagId) => ({ key: tagId, value: "" })));
+        setTempTagRows(tagsFilter.map((f) => ({ key: f.key, value: f.value })));
       } else {
         setTempTagRows([{ key: "", value: "" }]);
       }
@@ -121,8 +130,9 @@ export default function WorkspaceFilter({
   };
 
   const handleApplyTags = () => {
-    const validTags = tempTagRows.map((r) => r.key).filter((k) => k);
+    const validTags = tempTagRows.filter((r) => r.key);
     setTagsFilter(validTags);
+    sessionStorage.setItem("selectedTags", JSON.stringify(validTags));
     setIsTagsPopoverOpen(false);
   };
 
@@ -135,9 +145,13 @@ export default function WorkspaceFilter({
   };
 
   const removeFilterRow = (index: number) => {
-    const newRows = [...tempTagRows];
-    newRows.splice(index, 1);
-    setTempTagRows(newRows);
+    if (tempTagRows.length === 1) {
+      setTempTagRows([{ key: "", value: "" }]);
+    } else {
+      const newRows = [...tempTagRows];
+      newRows.splice(index, 1);
+      setTempTagRows(newRows);
+    }
   };
 
   const updateFilterRow = (index: number, field: "key" | "value", val: string) => {
@@ -173,9 +187,7 @@ export default function WorkspaceFilter({
             onChange={(e) => updateFilterRow(index, "value", e.target.value)}
             style={{ width: "45%" }}
           />
-          {tempTagRows.length > 1 && (
-            <DeleteOutlined className="filter-row-remove" onClick={() => removeFilterRow(index)} />
-          )}
+          {row.key && <DeleteOutlined className="filter-row-remove" onClick={() => removeFilterRow(index)} />}
         </div>
       ))}
       <button type="button" className="add-filter-btn" onClick={addFilterRow}>

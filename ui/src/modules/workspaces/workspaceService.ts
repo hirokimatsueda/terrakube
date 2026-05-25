@@ -29,6 +29,7 @@ async function listWorkspaces(organizationId: string): Promise<ApiResponse<ListW
                           node {
                             id
                             tagId
+                            value
                           }
                         }
                       }
@@ -84,7 +85,10 @@ async function listWorkspaces(organizationId: string): Promise<ApiResponse<ListW
       source: element.node.source,
       normalizedSource: formatSshUrl(element.node.source),
       terraformVersion: element.node.terraformVersion,
-      tags: element.node?.workspaceTag?.edges?.map((e: any) => e.node.tagId),
+      tags: element.node?.workspaceTag?.edges?.map((e: any) => ({
+        tagId: e.node.tagId,
+        value: e.node.value ?? undefined,
+      })),
       projectId: element.node?.project?.edges?.[0]?.node?.id,
       projectName: element.node?.project?.edges?.[0]?.node?.name,
     };

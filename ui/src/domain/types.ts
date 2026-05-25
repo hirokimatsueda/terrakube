@@ -303,6 +303,7 @@ export type ApiWorkspaceTag = {
   attributes: {
     tagId: string;
     name: string;
+    value?: string;
   } & AuditFieldBase;
   relationships: any;
   type: string;

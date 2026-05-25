@@ -88,6 +88,9 @@ class ServerApplicationTests {
     @Autowired
     TeamRepository teamRepository;
 
+    @Autowired
+    WorkspaceTagRepository workspaceTagRepository;
+
     @Value("${io.terrakube.token.pat}")
     private String base64Key;
 
